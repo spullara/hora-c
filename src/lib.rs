@@ -75,8 +75,7 @@ pub extern fn hora_add(
 
     match &mut ANN_INDEX_MANAGER.lock().unwrap().get_mut(&idx_name) {
         Some(index) => {
-            let n = hora::core::node::Node::new_with_idx(&buf, idx);
-            index.add_node(&n).unwrap();
+            index.add(&buf, idx).unwrap();
         }
         None => {}
     }
@@ -86,15 +85,20 @@ pub extern fn hora_add(
 pub extern fn hora_build(
     name: *const c_char,
     mt: *const c_char,
-) {
+) -> char_p::Box {
     let idx_name: String = cchar_to_string(name);
     let metric: String = cchar_to_string(mt);
 
     match &mut ANN_INDEX_MANAGER.lock().unwrap().get_mut(&idx_name) {
         Some(index) => {
-            index.build(metrics_transform(&metric)).unwrap();
+            match index.build(metrics_transform(&metric)) {
+                Ok(()) => char_p::new("Ok"),
+                Err(e) => char_p::new(e),
+            }
         }
-        None => {}
+        None => {
+            return char_p::new("No index")
+        }
     }
 }
 
@@ -106,7 +110,7 @@ pub extern fn hora_search(
     dimension: usize
 ) -> repr_c::Vec<char_p::Box> {
     let idx_name: String = cchar_to_string(name);
-    let data_slice = unsafe { slice::from_raw_parts(features as *const f64, dimension) };
+    let data_slice = unsafe { slice::from_raw_parts(features, dimension) };
     let buf = data_slice.to_vec();
     let topk = k;
 
@@ -115,8 +119,8 @@ pub extern fn hora_search(
         index.search(&buf, topk).iter().for_each( |x| {
             result.push(char_p::new(x.clone() ))
         })
-    }
 
+    }
     result.into()
 }
 
@@ -156,6 +160,43 @@ pub extern fn hora_dump(
 #[test]
 fn generate_headers() -> ::std::io::Result<()> {
     ::safer_ffi::headers::builder()
-        .to_file("hora.h")?
+        .to_file("include/hora.h")?
         .generate()
+}
+
+#[test]
+fn hora_test() {
+    ANN_INDEX_MANAGER.lock().unwrap().insert(
+        "test".parse().unwrap(),
+        Box::new(hora::index::hnsw_idx::HNSWIndex::<
+            f64,
+            String,
+        >::new(
+            8,
+            &hora::index::hnsw_params::HNSWParams::<f64>::default(),
+        )),
+    );
+    let buf: Vec<f64> = vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+    let buf2: Vec<f64> = vec![2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0];
+    let buf3: Vec<f64> = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
+    let mut result: Vec<String> = vec![];
+    match &mut ANN_INDEX_MANAGER.lock().unwrap().get_mut("test") {
+        Some(index) => {
+            index.add(&buf, "id".to_string()).unwrap();
+            index.add(&buf2, "id2".to_string()).unwrap();
+            index.add(&buf3, "id3".to_string()).unwrap();
+            println!("Added nodes");
+            index.build(metrics_transform("euclidean")).unwrap();
+
+            println!("Built\n");
+            index.search(&buf, 3).iter().for_each( |x| {
+                println!("Found result: {}", x);
+                result.push(x.clone())
+            })
+        }
+        None => {}
+    }
+    for x in result {
+        println!("{}", x);
+    }
 }
