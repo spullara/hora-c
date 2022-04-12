@@ -1,0 +1,19 @@
+[package]
+authors = ["Sam Pullara <spullara@gmail.com>"]
+edition = "2018"
+name = "hora_c"
+version = "0.0.1"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "hora_c"
+crate-type = ["staticlib"]
+
+[dependencies]
+lazy_static = "1.4.0"
+safer-ffi = { version = "*", features = ["proc_macros"] }
+hora = "0.1.1"
+
+[features]
+c-headers = ["safer-ffi/headers"]
