@@ -1,4 +1,4 @@
-# hora-swift
+# hora-c
 
 derived from hora-java
 
